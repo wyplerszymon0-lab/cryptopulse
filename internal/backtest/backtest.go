@@ -1,12 +1,12 @@
-// Package backtest provides a walk-forward backtesting engine for evaluating
-// the Engine's signal quality over historical data.
+// Package backtest evaluates the Engine's composite score as a trading signal
+// over historical data, with no lookahead.
 //
 // Trading rules:
-//   - Signal computed at close of day T using only prices[0..T] (no lookahead).
-//   - Order executes at close of day T+1 (realistic next-day fill).
+//   - The score for day T is computed at its close using only prices[0..T].
+//   - Orders execute at the close of day T+1 (realistic next-day fill).
 //   - 0.1% commission per side (typical centralised-exchange spot fee).
-//   - Long-only strategy: enter on BUY/STRONG BUY, exit on SELL/STRONG SELL.
-//   - Portfolio starts at $10,000; partial shares are supported.
+//   - Long-only: enter when score >= Params.Entry, exit when score <= Params.Exit.
+//   - Portfolio starts at $10,000; partial units are supported.
 package backtest
 
 import (
@@ -26,7 +26,20 @@ const (
 	InitialCapital = 10_000.0
 	// CommissionRate is the per-trade fee as a fraction of notional (0.1%).
 	CommissionRate = 0.001
+	// PeriodsPerYear annualises daily Sharpe and Sortino. Crypto trades every day
+	// of the year, so this is 365, not the 252 trading days of equity markets.
+	PeriodsPerYear = 365
 )
+
+// Params are the score thresholds that drive the long-only strategy.
+type Params struct {
+	Entry float64 `json:"entry"` // buy when flat and score >= Entry
+	Exit  float64 `json:"exit"`  // sell when long and score <= Exit
+}
+
+// DefaultParams reproduce the engine's signal labels: enter on BUY or better
+// (score >= 0.2), exit on SELL or worse (score <= -0.2).
+var DefaultParams = Params{Entry: 0.2, Exit: -0.2}
 
 // Trade records a single completed round-trip.
 type Trade struct {
@@ -58,8 +71,9 @@ type Result struct {
 	ProfitFactor float64 `json:"profit_factor"`
 
 	// Metadata
-	DataPoints int     `json:"data_points"`
-	Trades     []Trade `json:"trades,omitempty"`
+	DataPoints int       `json:"data_points"`
+	Trades     []Trade   `json:"trades,omitempty"`
+	Equity     []float64 `json:"equity,omitempty"` // portfolio value at each day's close
 }
 
 // Predictor is the interface required by Run; satisfied by *predictor.Engine.
@@ -68,135 +82,141 @@ type Predictor interface {
 	Prices() []float64
 }
 
-// Run simulates the strategy over the engine's price series and returns performance metrics.
+// Scores returns the lookahead-free composite score for every day. Days that
+// cannot trade (the warmup period, the last day, or a failed prediction) are NaN.
+func Scores(eng Predictor) []float64 {
+	n := len(eng.Prices())
+	scores := make([]float64, n)
+	for i := range scores {
+		scores[i] = math.NaN()
+		if i < WarmupPeriod || i >= n-1 {
+			continue
+		}
+		if r, err := eng.PredictAt(i); err == nil {
+			scores[i] = r.Score
+		}
+	}
+	return scores
+}
+
+// Run backtests the default thresholds over the engine's full price series.
 func Run(eng Predictor) (Result, error) {
+	return RunWithParams(eng, DefaultParams)
+}
+
+// RunWithParams backtests the given thresholds over the engine's full price series.
+func RunWithParams(eng Predictor, p Params) (Result, error) {
 	prices := eng.Prices()
 	n := len(prices)
 	if n < MinDataPoints {
 		return Result{}, fmt.Errorf("backtest requires at least %d prices, have %d", MinDataPoints, n)
 	}
-
-	// portfolioValues[i] = portfolio value (mark-to-market) at close of day i.
-	portfolioValues := make([]float64, n)
-
-	var (
-		cash       = InitialCapital
-		holdings   float64
-		inPos      bool
-		entryIdx   int
-		entryPrice float64
-		trades     []Trade
-		peakValue  = InitialCapital
-		maxDD      float64
-	)
-
-	for i := 0; i < n; i++ {
-		// Mark portfolio to market at today's close.
-		if inPos {
-			portfolioValues[i] = holdings * prices[i]
-		} else {
-			portfolioValues[i] = cash
-		}
-
-		// Track running peak and compute drawdown.
-		if portfolioValues[i] > peakValue {
-			peakValue = portfolioValues[i]
-		}
-		if peakValue > 0 {
-			dd := (peakValue - portfolioValues[i]) / peakValue * 100
-			if dd > maxDD {
-				maxDD = dd
-			}
-		}
-
-		// No trading during warmup or on the final day (no next-day fill possible).
-		if i < WarmupPeriod || i >= n-1 {
-			continue
-		}
-
-		// Compute signal on all history available through today (no lookahead).
-		result, err := eng.PredictAt(i)
-		if err != nil {
-			continue // skip day if prediction fails (e.g. not enough warmup yet)
-		}
-
-		nextPrice := prices[i+1]
-
-		switch {
-		case !inPos && result.Signal >= predictor.Buy:
-			// Enter long: buy at tomorrow's close.
-			holdings = cash * (1 - CommissionRate) / nextPrice
-			entryPrice = nextPrice
-			entryIdx = i + 1
-			cash = 0
-			inPos = true
-
-		case inPos && result.Signal <= predictor.Sell:
-			// Exit long: sell at tomorrow's close.
-			proceeds := holdings * nextPrice * (1 - CommissionRate)
-			ret := (nextPrice - entryPrice) / entryPrice * 100
-			trades = append(trades, Trade{
-				EntryIndex: entryIdx,
-				ExitIndex:  i + 1,
-				EntryPrice: entryPrice,
-				ExitPrice:  nextPrice,
-				ReturnPct:  ret,
-				Winner:     ret > 0,
-			})
-			cash = proceeds
-			holdings = 0
-			inPos = false
-		}
-	}
-
-	// Force-close any open position at the last price.
-	if inPos {
-		last := prices[n-1]
-		proceeds := holdings * last * (1 - CommissionRate)
-		ret := (last - entryPrice) / entryPrice * 100
-		trades = append(trades, Trade{
-			EntryIndex: entryIdx,
-			ExitIndex:  n - 1,
-			EntryPrice: entryPrice,
-			ExitPrice:  last,
-			ReturnPct:  ret,
-			Winner:     ret > 0,
-		})
-		cash = proceeds
-		portfolioValues[n-1] = cash
-	}
-
-	// Compute daily returns from the portfolio value series.
-	dailyReturns := make([]float64, 0, n-1)
-	for i := 1; i < n; i++ {
-		if portfolioValues[i-1] > 0 {
-			dailyReturns = append(dailyReturns, (portfolioValues[i]-portfolioValues[i-1])/portfolioValues[i-1])
-		}
-	}
-
-	finalValue := cash
-	totalRet := (finalValue - InitialCapital) / InitialCapital * 100
-	annRet := annualizedReturn(finalValue, InitialCapital, n)
-	sharpe := sharpeRatio(dailyReturns)
-	sortino := sortinoRatio(dailyReturns)
-	winRate, profitFactor := tradeMetrics(trades)
+	sim := simulate(prices, Scores(eng), p, 0, n, InitialCapital)
+	res := summarize(sim, InitialCapital)
 	// Buy-and-hold is measured from the end of the warmup period to avoid penalising
 	// the strategy for the period it was not yet active.
-	buyHold := (prices[n-1] - prices[WarmupPeriod]) / prices[WarmupPeriod] * 100
+	res.BuyHoldReturn = pctChange(prices[WarmupPeriod], prices[n-1])
+	res.DataPoints = n
+	return res, nil
+}
 
+// simulation is the raw outcome of trading one window.
+type simulation struct {
+	equity []float64 // portfolio value at the close of each day in the window
+	trades []Trade
+}
+
+// simulate trades days [from, to) starting flat with `capital`. A decision on day
+// i fills at the close of day i+1; any position still open is closed at the close
+// of day to-1, so the window always ends in cash.
+func simulate(prices, scores []float64, p Params, from, to int, capital float64) simulation {
+	sim := simulation{equity: make([]float64, 0, to-from)}
+	cash, holdings := capital, 0.0
+	inPos := false
+	var entryIdx int
+	var entryPrice float64
+
+	closePosition := func(idx int) {
+		price := prices[idx]
+		cash = holdings * price * (1 - CommissionRate)
+		ret := pctChange(entryPrice, price)
+		sim.trades = append(sim.trades, Trade{
+			EntryIndex: entryIdx, ExitIndex: idx,
+			EntryPrice: entryPrice, ExitPrice: price,
+			ReturnPct: ret, Winner: ret > 0,
+		})
+		holdings, inPos = 0, false
+	}
+
+	for i := from; i < to; i++ {
+		if i == to-1 && inPos {
+			closePosition(i)
+		}
+		if inPos {
+			sim.equity = append(sim.equity, holdings*prices[i])
+		} else {
+			sim.equity = append(sim.equity, cash)
+		}
+
+		if i >= to-1 || math.IsNaN(scores[i]) {
+			continue
+		}
+		next := i + 1
+		switch {
+		case !inPos && scores[i] >= p.Entry:
+			holdings = cash * (1 - CommissionRate) / prices[next]
+			entryPrice, entryIdx = prices[next], next
+			cash, inPos = 0, true
+		case inPos && scores[i] <= p.Exit:
+			closePosition(next)
+		}
+	}
+	return sim
+}
+
+// summarize turns a simulation into performance metrics.
+func summarize(sim simulation, capital float64) Result {
+	eq := sim.equity
+	final := eq[len(eq)-1]
+	winRate, profitFactor := tradeMetrics(sim.trades)
+	returns := dailyReturns(eq)
 	return Result{
-		TotalReturn:      totalRet,
-		AnnualizedReturn: annRet,
-		BuyHoldReturn:    buyHold,
-		SharpeRatio:      sharpe,
-		SortinoRatio:     sortino,
-		MaxDrawdown:      maxDD,
+		TotalReturn:      pctChange(capital, final),
+		AnnualizedReturn: annualizedReturn(final, capital, len(eq)),
+		SharpeRatio:      sharpeRatio(returns),
+		SortinoRatio:     sortinoRatio(returns),
+		MaxDrawdown:      maxDrawdown(eq),
 		WinRate:          winRate,
-		TotalTrades:      len(trades),
+		TotalTrades:      len(sim.trades),
 		ProfitFactor:     profitFactor,
-		DataPoints:       n,
-		Trades:           trades,
-	}, nil
+		Trades:           sim.trades,
+		Equity:           eq,
+	}
+}
+
+func pctChange(from, to float64) float64 {
+	return (to - from) / from * 100
+}
+
+func dailyReturns(equity []float64) []float64 {
+	out := make([]float64, 0, len(equity))
+	for i := 1; i < len(equity); i++ {
+		if equity[i-1] > 0 {
+			out = append(out, equity[i]/equity[i-1]-1)
+		}
+	}
+	return out
+}
+
+func maxDrawdown(equity []float64) float64 {
+	var peak, maxDD float64
+	for _, v := range equity {
+		peak = math.Max(peak, v)
+		if peak > 0 {
+			maxDD = math.Max(maxDD, (peak-v)/peak*100)
+		}
+	}
+	return maxDD
 }
 
 func annualizedReturn(final, initial float64, days int) float64 {
@@ -218,30 +238,26 @@ func sharpeRatio(returns []float64) float64 {
 	if s == 0 {
 		return 0
 	}
-	return m / s * math.Sqrt(252)
+	return m / s * math.Sqrt(PeriodsPerYear)
 }
 
-// sortinoRatio is like Sharpe but penalises only downside deviation.
+// sortinoRatio is like Sharpe but penalises only downside deviation:
+// sqrt(mean(min(r, 0)^2)) over *all* periods, with a zero target return.
 func sortinoRatio(returns []float64) float64 {
 	if len(returns) < 2 {
 		return 0
 	}
-	m := mean(returns)
-
-	var neg []float64
+	var sumSq float64
 	for _, r := range returns {
 		if r < 0 {
-			neg = append(neg, r)
+			sumSq += r * r
 		}
 	}
-	if len(neg) == 0 {
+	downside := math.Sqrt(sumSq / float64(len(returns)))
+	if downside == 0 {
 		return 0
 	}
-	ds := stdDev(neg, 0)
-	if ds == 0 {
-		return 0
-	}
-	return m / ds * math.Sqrt(252)
+	return mean(returns) / downside * math.Sqrt(PeriodsPerYear)
 }
 
 func tradeMetrics(trades []Trade) (winRate, profitFactor float64) {

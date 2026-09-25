@@ -2,7 +2,7 @@ BINARY  := predictor
 GO      := go
 LDFLAGS := -ldflags="-s -w"
 
-.PHONY: build test bench vet clean docker run backtest
+.PHONY: build test bench vet clean docker run backtest optimize dashboard
 
 ## build: compile to a static binary
 build:
@@ -39,3 +39,12 @@ backtest: build
 ## help: list available targets
 help:
 	@grep -E '^## ' Makefile | sed 's/## /  /'
+
+## optimize: walk-forward optimisation over the last year
+optimize:
+	$(GO) run . --optimize --days 365
+
+## dashboard: regenerate web/data.json and serve the dashboard on http://localhost:8000
+dashboard:
+	$(GO) run . --days 365 --export web/data.json
+	cd web && python3 -m http.server 8000

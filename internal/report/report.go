@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/wyplerszymon0-lab/cryptopulse/internal/backtest"
 	"github.com/wyplerszymon0-lab/cryptopulse/internal/indicators"
@@ -25,11 +26,13 @@ const (
 func PrintHeader(version string) {
 	title := fmt.Sprintf("CryptoPulse v%s  ·  Technical Analysis & Backtesting Engine", version)
 	sub := "Go  ·  Zero Dependencies  ·  7 Indicators  ·  Walk-Forward Backtest"
-	width := max(len(title), len(sub)) + 4
+	// Pad by rune count: "·" is one column but two bytes.
+	titleW, subW := utf8.RuneCountInString(title), utf8.RuneCountInString(sub)
+	width := max(titleW, subW) + 4
 
 	fmt.Printf("%s╔%s╗%s\n", cyan, strings.Repeat("═", width), reset)
-	fmt.Printf("%s║%s  %s%-*s  %s║%s\n", cyan, bold+white, "", width-4-len(title), title, reset+cyan, reset)
-	fmt.Printf("%s║%s  %s%-*s  %s║%s\n", cyan, dim+white, "", width-4-len(sub), sub, reset+cyan, reset)
+	fmt.Printf("%s║%s  %s%s  %s║%s\n", cyan, bold+white, title, strings.Repeat(" ", width-4-titleW), reset+cyan, reset)
+	fmt.Printf("%s║%s  %s%s  %s║%s\n", cyan, dim+white, sub, strings.Repeat(" ", width-4-subW), reset+cyan, reset)
 	fmt.Printf("%s╚%s╝%s\n\n", cyan, strings.Repeat("═", width), reset)
 }
 
@@ -221,4 +224,49 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// PrintWalkForward prints the out-of-sample comparison and the per-fold choices.
+func PrintWalkForward(results []backtest.WalkForwardResult) {
+	fmt.Printf("\n%s━━━━━━━━━━━━━━━━━━━━━ WALK-FORWARD OPTIMISATION ━━━━━━━━━━━━━━━━━━━━━%s\n", bold+cyan, reset)
+
+	for _, wf := range results {
+		days := len(wf.Optimized.Equity)
+		fmt.Printf("\n  %s%s%s  %sout-of-sample: last %d days, %d folds%s\n\n",
+			bold, strings.ToUpper(wf.CoinID), reset, dim, days, len(wf.Folds), reset)
+		fmt.Printf("  %s%-22s  %10s  %8s  %9s  %8s  %7s%s\n", bold,
+			"Strategy", "Total Ret", "Sharpe", "Sortino", "Max DD", "Trades", reset)
+		fmt.Printf("  %s\n", strings.Repeat("─", 72))
+		rows := []struct {
+			name string
+			r    backtest.Result
+		}{
+			{"Walk-forward optimised", wf.Optimized},
+			{"Fixed default (±0.2)", wf.Fixed},
+			{"Buy & hold", wf.BuyHold},
+		}
+		for _, row := range rows {
+			col := green
+			if row.r.TotalReturn < 0 {
+				col = red
+			}
+			fmt.Printf("  %-22s  %s%+9.1f%%%s  %8.2f  %9.2f  %s%7.1f%%%s  %7d\n",
+				row.name, col, row.r.TotalReturn, reset, row.r.SharpeRatio, row.r.SortinoRatio,
+				red, -row.r.MaxDrawdown, reset, row.r.TotalTrades)
+		}
+
+		fmt.Printf("\n  %sFold  Test days   Chosen entry/exit   Train Sharpe   Test return%s\n", dim, reset)
+		for i, f := range wf.Folds {
+			col := green
+			if f.TestReturn < 0 {
+				col = red
+			}
+			fmt.Printf("  %4d  %3d–%-3d      %+.1f / %+.1f          %6.2f       %s%+7.1f%%%s\n",
+				i+1, f.TestStart, f.TestEnd-1, f.Chosen.Entry, f.Chosen.Exit, f.TrainSharpe, col, f.TestReturn, reset)
+		}
+	}
+
+	fmt.Printf("\n  %sParameters are chosen by in-sample Sharpe on each training window and only\n", dim)
+	fmt.Printf("  scored on the following test window, so every number above is out-of-sample.%s\n", reset)
+	fmt.Printf("  %sWARNING: Past performance does not predict future results.%s\n\n", yellow, reset)
 }
