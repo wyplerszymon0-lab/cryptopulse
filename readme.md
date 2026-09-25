@@ -2,7 +2,7 @@
 
 **Real-time cryptocurrency technical analysis and walk-forward backtesting engine written in Go.**
 
-[![CI](https://github.com/wyplerszymon0-lab/CRYPTO-PRICE-PREDICTOR---Go-ML-Technical-Analysis-/actions/workflows/ci.yml/badge.svg)](https://github.com/wyplerszymon0-lab/CRYPTO-PRICE-PREDICTOR---Go-ML-Technical-Analysis-/actions)
+[![CI](https://github.com/wyplerszymon0-lab/cryptopulse/actions/workflows/ci.yml/badge.svg)](https://github.com/wyplerszymon0-lab/cryptopulse/actions)
 ![Go 1.22](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
@@ -132,8 +132,8 @@ Composite score is normalised over the weights of indicators that could be compu
 
 ```bash
 # Prerequisites: Go 1.22+, internet connection (CoinGecko public API, no key needed)
-git clone https://github.com/wyplerszymon0-lab/CRYPTO-PRICE-PREDICTOR---Go-ML-Technical-Analysis-
-cd CRYPTO-PRICE-PREDICTOR---Go-ML-Technical-Analysis-
+git clone https://github.com/wyplerszymon0-lab/cryptopulse
+cd cryptopulse
 
 # Live analysis: BTC, ETH, SOL (default)
 go run .
