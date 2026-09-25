@@ -1,3 +1,3 @@
-module github.com/wyplerszymon0-lab/crypto-predictor
+module github.com/wyplerszymon0-lab/cryptopulse
 
 go 1.22.0

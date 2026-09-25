@@ -5,9 +5,9 @@ import (
 	"math"
 	"strings"
 
-	"github.com/wyplerszymon0-lab/crypto-predictor/internal/backtest"
-	"github.com/wyplerszymon0-lab/crypto-predictor/internal/indicators"
-	"github.com/wyplerszymon0-lab/crypto-predictor/internal/predictor"
+	"github.com/wyplerszymon0-lab/cryptopulse/internal/backtest"
+	"github.com/wyplerszymon0-lab/cryptopulse/internal/indicators"
+	"github.com/wyplerszymon0-lab/cryptopulse/internal/predictor"
 )
 
 const (

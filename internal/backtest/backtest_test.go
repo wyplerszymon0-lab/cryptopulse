@@ -3,7 +3,7 @@ package backtest
 import (
 	"testing"
 
-	"github.com/wyplerszymon0-lab/crypto-predictor/internal/predictor"
+	"github.com/wyplerszymon0-lab/cryptopulse/internal/predictor"
 )
 
 // trendPrices returns n prices on a linear trend: start + slope*i.

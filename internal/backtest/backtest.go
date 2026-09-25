@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/wyplerszymon0-lab/crypto-predictor/internal/predictor"
+	"github.com/wyplerszymon0-lab/cryptopulse/internal/predictor"
 )
 
 const (

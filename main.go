@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wyplerszymon0-lab/crypto-predictor/internal/api"
-	"github.com/wyplerszymon0-lab/crypto-predictor/internal/backtest"
-	"github.com/wyplerszymon0-lab/crypto-predictor/internal/predictor"
-	"github.com/wyplerszymon0-lab/crypto-predictor/internal/report"
+	"github.com/wyplerszymon0-lab/cryptopulse/internal/api"
+	"github.com/wyplerszymon0-lab/cryptopulse/internal/backtest"
+	"github.com/wyplerszymon0-lab/cryptopulse/internal/predictor"
+	"github.com/wyplerszymon0-lab/cryptopulse/internal/report"
 )
 
 const version = "2.0.0"

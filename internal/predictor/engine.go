@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/wyplerszymon0-lab/crypto-predictor/internal/indicators"
+	"github.com/wyplerszymon0-lab/cryptopulse/internal/indicators"
 )
 
 // Signal represents a directional market signal as an ordered integer,
