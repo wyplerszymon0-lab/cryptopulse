@@ -215,7 +215,7 @@ func runBacktest(ctx context.Context, client *api.CoinGeckoClient, coins []strin
 		return
 	}
 
-	report.PrintBacktestSummary(btResults)
+	report.PrintBacktestSummary(os.Stdout, btResults)
 }
 
 func runOptimize(ctx context.Context, client *api.CoinGeckoClient, coins []string, days, workers int,
@@ -245,7 +245,7 @@ func runOptimize(ctx context.Context, client *api.CoinGeckoClient, coins []strin
 		writeJSON(os.Stdout, results)
 		return
 	}
-	report.PrintWalkForward(results)
+	report.PrintWalkForward(os.Stdout, results)
 }
 
 // exportCoin is one coin's entry in the --export file consumed by the web dashboard.

@@ -2,6 +2,7 @@ package report
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"strings"
 	"unicode/utf8"
@@ -115,19 +116,19 @@ func PrintResult(r predictor.Result) {
 	fmt.Printf("  %-24s  %.1f%%   %s\n\n", "Confidence", r.Confidence, confidenceBar(r.Confidence))
 }
 
-// PrintBacktestSummary prints a formatted comparison table of backtest results.
-func PrintBacktestSummary(results []backtest.Result) {
+// PrintBacktestSummary prints a formatted comparison table of backtest results to w.
+func PrintBacktestSummary(w io.Writer, results []backtest.Result) {
 	if len(results) == 0 {
-		fmt.Println("No backtest results.")
+		fmt.Fprintln(w, "No backtest results.")
 		return
 	}
 
-	fmt.Printf("\n%s━━━━━━━━━━━━━━━━━━━━━━━━━━ BACKTEST RESULTS ━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n", bold+cyan, reset)
+	fmt.Fprintf(w, "\n%s━━━━━━━━━━━━━━━━━━━━━━━━━━ BACKTEST RESULTS ━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n", bold+cyan, reset)
 
 	hdr := fmt.Sprintf("  %-10s  %-10s  %-10s  %-8s  %-9s  %-9s  %-9s  %-7s  %-10s",
 		"Coin", "Total Ret", "Ann. Ret", "Sharpe", "Sortino", "Max DD", "Win Rate", "Trades", "vs B&H")
-	fmt.Printf("%s%s%s\n", bold, hdr, reset)
-	fmt.Printf("  %s\n", strings.Repeat("─", 94))
+	fmt.Fprintf(w, "%s%s%s\n", bold, hdr, reset)
+	fmt.Fprintf(w, "  %s\n", strings.Repeat("─", 94))
 
 	for _, r := range results {
 		vsB := r.TotalReturn - r.BuyHoldReturn
@@ -140,7 +141,7 @@ func PrintBacktestSummary(results []backtest.Result) {
 			vsBCol = red
 		}
 
-		fmt.Printf("  %-10s  %s%+8.1f%%%s  %+8.1f%%  %8.2f  %9.2f  %s%8.1f%%%s  %8.1f%%  %7d  %s%+8.1f%%p%s\n",
+		fmt.Fprintf(w, "  %-10s  %s%+8.1f%%%s  %+8.1f%%  %8.2f  %9.2f  %s%8.1f%%%s  %8.1f%%  %7d  %s%+8.1f%%p%s\n",
 			strings.ToUpper(r.CoinID),
 			retCol, r.TotalReturn, reset,
 			r.AnnualizedReturn,
@@ -153,10 +154,10 @@ func PrintBacktestSummary(results []backtest.Result) {
 		)
 	}
 
-	fmt.Printf("\n  %s%d  %s\n", dim, len(results), "coin(s) backtested")
-	fmt.Printf("  Trades fill at next-day close · 0.1%% commission per side · long-only\n")
-	fmt.Printf("  vs B&H: percentage-point difference vs buying and holding from warmup day%s\n\n", reset)
-	fmt.Printf("  %sWARNING: Past performance does not predict future results.%s\n\n", yellow, reset)
+	fmt.Fprintf(w, "\n  %s%d  %s\n", dim, len(results), "coin(s) backtested")
+	fmt.Fprintf(w, "  Trades fill at next-day close · 0.1%% commission per side · long-only\n")
+	fmt.Fprintf(w, "  vs B&H: percentage-point difference vs buying and holding from warmup day%s\n\n", reset)
+	fmt.Fprintf(w, "  %sWARNING: Past performance does not predict future results.%s\n\n", yellow, reset)
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -226,17 +227,17 @@ func max(a, b int) int {
 	return b
 }
 
-// PrintWalkForward prints the out-of-sample comparison and the per-fold choices.
-func PrintWalkForward(results []backtest.WalkForwardResult) {
-	fmt.Printf("\n%s━━━━━━━━━━━━━━━━━━━━━ WALK-FORWARD OPTIMISATION ━━━━━━━━━━━━━━━━━━━━━%s\n", bold+cyan, reset)
+// PrintWalkForward prints the out-of-sample comparison and the per-fold choices to w.
+func PrintWalkForward(w io.Writer, results []backtest.WalkForwardResult) {
+	fmt.Fprintf(w, "\n%s━━━━━━━━━━━━━━━━━━━━━ WALK-FORWARD OPTIMISATION ━━━━━━━━━━━━━━━━━━━━━%s\n", bold+cyan, reset)
 
 	for _, wf := range results {
 		days := len(wf.Optimized.Equity)
-		fmt.Printf("\n  %s%s%s  %sout-of-sample: last %d days, %d folds%s\n\n",
+		fmt.Fprintf(w, "\n  %s%s%s  %sout-of-sample: last %d days, %d folds%s\n\n",
 			bold, strings.ToUpper(wf.CoinID), reset, dim, days, len(wf.Folds), reset)
-		fmt.Printf("  %s%-22s  %10s  %8s  %9s  %8s  %7s%s\n", bold,
+		fmt.Fprintf(w, "  %s%-22s  %10s  %8s  %9s  %8s  %7s%s\n", bold,
 			"Strategy", "Total Ret", "Sharpe", "Sortino", "Max DD", "Trades", reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 72))
+		fmt.Fprintf(w, "  %s\n", strings.Repeat("─", 72))
 		rows := []struct {
 			name string
 			r    backtest.Result
@@ -250,23 +251,23 @@ func PrintWalkForward(results []backtest.WalkForwardResult) {
 			if row.r.TotalReturn < 0 {
 				col = red
 			}
-			fmt.Printf("  %-22s  %s%+9.1f%%%s  %8.2f  %9.2f  %s%7.1f%%%s  %7d\n",
+			fmt.Fprintf(w, "  %-22s  %s%+9.1f%%%s  %8.2f  %9.2f  %s%7.1f%%%s  %7d\n",
 				row.name, col, row.r.TotalReturn, reset, row.r.SharpeRatio, row.r.SortinoRatio,
 				red, -row.r.MaxDrawdown, reset, row.r.TotalTrades)
 		}
 
-		fmt.Printf("\n  %sFold  Test days   Chosen entry/exit   Train Sharpe   Test return%s\n", dim, reset)
+		fmt.Fprintf(w, "\n  %sFold  Test days   Chosen entry/exit   Train Sharpe   Test return%s\n", dim, reset)
 		for i, f := range wf.Folds {
 			col := green
 			if f.TestReturn < 0 {
 				col = red
 			}
-			fmt.Printf("  %4d  %3d–%-3d      %+.1f / %+.1f          %6.2f       %s%+7.1f%%%s\n",
+			fmt.Fprintf(w, "  %4d  %3d–%-3d      %+.1f / %+.1f          %6.2f       %s%+7.1f%%%s\n",
 				i+1, f.TestStart, f.TestEnd-1, f.Chosen.Entry, f.Chosen.Exit, f.TrainSharpe, col, f.TestReturn, reset)
 		}
 	}
 
-	fmt.Printf("\n  %sParameters are chosen by in-sample Sharpe on each training window and only\n", dim)
-	fmt.Printf("  scored on the following test window, so every number above is out-of-sample.%s\n", reset)
-	fmt.Printf("  %sWARNING: Past performance does not predict future results.%s\n\n", yellow, reset)
+	fmt.Fprintf(w, "\n  %sParameters are chosen by in-sample Sharpe on each training window and only\n", dim)
+	fmt.Fprintf(w, "  scored on the following test window, so every number above is out-of-sample.%s\n", reset)
+	fmt.Fprintf(w, "  %sWARNING: Past performance does not predict future results.%s\n\n", yellow, reset)
 }
