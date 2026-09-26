@@ -1,0 +1,14 @@
+
+[1m[36m━━━━━━━━━━━━━━━━━━━━━━━━━━ BACKTEST RESULTS ━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[1m  Coin        Total Ret   Ann. Ret    Sharpe    Sortino    Max DD     Win Rate   Trades   vs B&H    [0m
+  ──────────────────────────────────────────────────────────────────────────────────────────────
+  BTC         [32m   +45.2%[0m     +62.4%      1.85       2.40  [31m   -14.2%[0m      65.5%       24  [32m   +25.2%p[0m
+  ETH         [31m   -12.5%[0m     -15.1%      0.42       0.55  [31m   -28.6%[0m      42.0%       18  [31m   -17.5%p[0m
+
+  [2m2  coin(s) backtested
+  Trades fill at next-day close · 0.1% commission per side · long-only
+  vs B&H: percentage-point difference vs buying and holding from warmup day[0m
+
+  [33mWARNING: Past performance does not predict future results.[0m
+
