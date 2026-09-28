@@ -3,27 +3,34 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 )
 
 const (
-	baseURL    = "https://api.coingecko.com/api/v3"
-	maxRetries = 3
+	defaultBaseURL = "https://api.coingecko.com/api/v3"
+	maxRetries     = 3
+	maxRetryAfter  = 60 * time.Second
 )
 
 // CoinGeckoClient is a rate-limit-aware HTTP client for the CoinGecko public API.
 type CoinGeckoClient struct {
-	http *http.Client
+	http    *http.Client
+	baseURL string
+	backoff time.Duration // wait before the first retry; doubles on each further retry
 }
 
 // NewCoinGeckoClient creates a client with a 20-second per-request timeout.
 func NewCoinGeckoClient() *CoinGeckoClient {
 	return &CoinGeckoClient{
-		http: &http.Client{Timeout: 20 * time.Second},
+		http:    &http.Client{Timeout: 20 * time.Second},
+		baseURL: defaultBaseURL,
+		backoff: time.Second,
 	}
 }
 
@@ -37,6 +44,17 @@ type Series struct {
 	Prices []float64
 }
 
+// retryableError marks failures worth another attempt: network errors,
+// rate limiting and server errors. Anything else (a 404 for an unknown coin,
+// a malformed body) fails immediately instead of burning retries.
+type retryableError struct {
+	err        error
+	retryAfter time.Duration // server-requested wait, 0 if none
+}
+
+func (e *retryableError) Error() string { return e.err.Error() }
+func (e *retryableError) Unwrap() error { return e.err }
+
 // FetchPrices retrieves daily closing prices for coinID in USD.
 func (c *CoinGeckoClient) FetchPrices(ctx context.Context, coinID string, days int) ([]float64, error) {
 	s, err := c.FetchSeries(ctx, coinID, days)
@@ -44,38 +62,46 @@ func (c *CoinGeckoClient) FetchPrices(ctx context.Context, coinID string, days i
 }
 
 // FetchSeries retrieves daily closing prices and their timestamps for coinID in USD.
-// On transient failures it retries up to 3 times with exponential backoff (1s, 2s, 4s).
+// Transient failures are retried up to 3 attempts in total, waiting 1s then 2s,
+// or longer if the server sends Retry-After.
 func (c *CoinGeckoClient) FetchSeries(ctx context.Context, coinID string, days int) (Series, error) {
-	url := fmt.Sprintf(
+	endpoint := fmt.Sprintf(
 		"%s/coins/%s/market_chart?vs_currency=usd&days=%d&interval=daily",
-		baseURL, coinID, days,
+		c.baseURL, url.PathEscape(coinID), days,
 	)
 
 	var lastErr error
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(math.Pow(2, float64(attempt-1))) * time.Second
-			slog.Debug("retry backoff", "coin", coinID, "attempt", attempt, "wait", backoff)
-			select {
-			case <-ctx.Done():
-				return Series{}, ctx.Err()
-			case <-time.After(backoff):
-			}
-		}
-
-		series, err := c.fetchOnce(ctx, url)
+	wait := c.backoff
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		series, err := c.fetchOnce(ctx, endpoint)
 		if err == nil {
 			slog.Debug("fetched prices", "coin", coinID, "days", days, "points", len(series.Prices))
 			return series, nil
 		}
 		lastErr = err
-		slog.Debug("fetch failed", "coin", coinID, "attempt", attempt+1, "err", err)
+		slog.Debug("fetch failed", "coin", coinID, "attempt", attempt, "err", err)
+
+		var retryable *retryableError
+		if !errors.As(err, &retryable) {
+			return Series{}, err // the caller already names the coin
+		}
+		if attempt == maxRetries {
+			break
+		}
+		delay := max(wait, retryable.retryAfter)
+		slog.Debug("retry backoff", "coin", coinID, "attempt", attempt, "wait", delay)
+		select {
+		case <-ctx.Done():
+			return Series{}, ctx.Err()
+		case <-time.After(delay):
+		}
+		wait *= 2
 	}
-	return Series{}, fmt.Errorf("%s: all %d attempts failed: %w", coinID, maxRetries, lastErr)
+	return Series{}, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
 }
 
-func (c *CoinGeckoClient) fetchOnce(ctx context.Context, url string) (Series, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func (c *CoinGeckoClient) fetchOnce(ctx context.Context, endpoint string) (Series, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return Series{}, fmt.Errorf("build request: %w", err)
 	}
@@ -83,14 +109,24 @@ func (c *CoinGeckoClient) fetchOnce(ctx context.Context, url string) (Series, er
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return Series{}, fmt.Errorf("http: %w", err)
+		if ctx.Err() != nil {
+			return Series{}, ctx.Err() // cancelled by the caller: don't retry
+		}
+		return Series{}, &retryableError{err: fmt.Errorf("http: %w", err)}
 	}
 	defer resp.Body.Close()
 
-	switch resp.StatusCode {
-	case http.StatusTooManyRequests:
-		return Series{}, fmt.Errorf("rate limited (429) — reduce --workers or wait before retrying")
-	case http.StatusOK:
+	switch {
+	case resp.StatusCode == http.StatusOK:
+	case resp.StatusCode == http.StatusTooManyRequests:
+		return Series{}, &retryableError{
+			err:        fmt.Errorf("rate limited (429) — reduce --workers or wait before retrying"),
+			retryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
+		}
+	case resp.StatusCode >= 500:
+		return Series{}, &retryableError{err: fmt.Errorf("server error HTTP %d", resp.StatusCode)}
+	case resp.StatusCode == http.StatusNotFound:
+		return Series{}, fmt.Errorf("unknown coin ID (HTTP 404) — use CoinGecko IDs such as bitcoin, ethereum, solana")
 	default:
 		return Series{}, fmt.Errorf("unexpected HTTP %d", resp.StatusCode)
 	}
@@ -112,4 +148,13 @@ func (c *CoinGeckoClient) fetchOnce(ctx context.Context, url string) (Series, er
 		series.Prices[i] = p[1]
 	}
 	return series, nil
+}
+
+// parseRetryAfter reads a Retry-After header given in seconds, capped at one minute.
+func parseRetryAfter(header string) time.Duration {
+	secs, err := strconv.Atoi(header)
+	if err != nil || secs <= 0 {
+		return 0
+	}
+	return min(time.Duration(secs)*time.Second, maxRetryAfter)
 }
