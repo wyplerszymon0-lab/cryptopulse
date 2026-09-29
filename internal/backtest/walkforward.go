@@ -43,13 +43,16 @@ type Fold struct {
 // WalkForwardResult compares, over the same out-of-sample days, the optimised
 // strategy with the fixed default thresholds and with buy-and-hold.
 type WalkForwardResult struct {
-	CoinID    string    `json:"coin_id"`
-	OOSStart  int       `json:"oos_start"` // first out-of-sample day
-	Folds     []Fold    `json:"folds"`
-	Optimized Result    `json:"optimized"`
-	Fixed     Result    `json:"fixed_default"`
-	BuyHold   Result    `json:"buy_hold"`
-	Prices    []float64 `json:"-"`
+	CoinID    string `json:"coin_id"`
+	OOSStart  int    `json:"oos_start"` // first out-of-sample day
+	Folds     []Fold `json:"folds"`
+	Optimized Result `json:"optimized"`
+	Fixed     Result `json:"fixed_default"`
+	// Same signals as Fixed, but each entry invests only enough to target
+	// DefaultVolTarget daily volatility (ATR-based) instead of all the capital.
+	VolTargeted Result    `json:"vol_targeted"`
+	BuyHold     Result    `json:"buy_hold"`
+	Prices      []float64 `json:"-"`
 }
 
 // WalkForward rolls a train/test split across the series. For each fold it picks
@@ -69,7 +72,7 @@ func WalkForward(eng Predictor, cfg WalkForwardConfig) (WalkForwardResult, error
 			oosStart+cfg.TestDays, WarmupPeriod, cfg.TrainDays, cfg.TestDays, n)
 	}
 
-	scores := Scores(eng)
+	scores, vol := Signals(eng)
 	res := WalkForwardResult{OOSStart: oosStart, Prices: prices}
 	capital := InitialCapital
 	var stitched simulation
@@ -80,15 +83,16 @@ func WalkForward(eng Predictor, cfg WalkForwardConfig) (WalkForwardResult, error
 
 		best, bestSharpe := cfg.Grid[0], math.Inf(-1)
 		for _, p := range cfg.Grid {
-			train := simulate(prices, scores, p, trainStart, testStart, InitialCapital)
+			train := simulate(prices, scores, p, trainStart, testStart, InitialCapital, nil)
 			if s := sharpeRatio(dailyReturns(train.equity)); s > bestSharpe {
 				best, bestSharpe = p, s
 			}
 		}
 
-		test := simulate(prices, scores, best, testStart, testEnd, capital)
+		test := simulate(prices, scores, best, testStart, testEnd, capital, nil)
 		stitched.equity = append(stitched.equity, test.equity...)
 		stitched.trades = append(stitched.trades, test.trades...)
+		stitched.exposure = append(stitched.exposure, test.exposure...)
 		end := test.equity[len(test.equity)-1]
 		res.Folds = append(res.Folds, Fold{
 			TrainStart: trainStart, TestStart: testStart, TestEnd: testEnd,
@@ -98,11 +102,13 @@ func WalkForward(eng Predictor, cfg WalkForwardConfig) (WalkForwardResult, error
 	}
 
 	res.Optimized = summarize(stitched, InitialCapital)
-	res.Fixed = summarize(simulate(prices, scores, DefaultParams, oosStart, n, InitialCapital), InitialCapital)
+	res.Fixed = summarize(simulate(prices, scores, DefaultParams, oosStart, n, InitialCapital, nil), InitialCapital)
+	sizing := VolTargetSizing(vol, DefaultVolTarget)
+	res.VolTargeted = summarize(simulate(prices, scores, DefaultParams, oosStart, n, InitialCapital, sizing), InitialCapital)
 	res.BuyHold = summarize(buyAndHold(prices, oosStart, n), InitialCapital)
 
 	bh := pctChange(prices[oosStart], prices[n-1])
-	for _, r := range []*Result{&res.Optimized, &res.Fixed, &res.BuyHold} {
+	for _, r := range []*Result{&res.Optimized, &res.Fixed, &res.VolTargeted, &res.BuyHold} {
 		r.BuyHoldReturn = bh
 		r.DataPoints = n - oosStart
 	}
@@ -112,9 +118,10 @@ func WalkForward(eng Predictor, cfg WalkForwardConfig) (WalkForwardResult, error
 // buyAndHold buys at the close of day `from` and marks to market until `to`.
 func buyAndHold(prices []float64, from, to int) simulation {
 	units := InitialCapital * (1 - CommissionRate) / prices[from]
-	sim := simulation{equity: make([]float64, 0, to-from)}
+	sim := simulation{equity: make([]float64, 0, to-from), exposure: make([]float64, 0, to-from)}
 	for i := from; i < to; i++ {
 		sim.equity = append(sim.equity, units*prices[i])
+		sim.exposure = append(sim.exposure, 1)
 	}
 	return sim
 }

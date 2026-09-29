@@ -234,15 +234,16 @@ func PrintWalkForward(results []backtest.WalkForwardResult) {
 		days := len(wf.Optimized.Equity)
 		fmt.Printf("\n  %s%s%s  %sout-of-sample: last %d days, %d folds%s\n\n",
 			bold, strings.ToUpper(wf.CoinID), reset, dim, days, len(wf.Folds), reset)
-		fmt.Printf("  %s%-22s  %10s  %8s  %9s  %8s  %7s%s\n", bold,
-			"Strategy", "Total Ret", "Sharpe", "Sortino", "Max DD", "Trades", reset)
-		fmt.Printf("  %s\n", strings.Repeat("─", 72))
+		fmt.Printf("  %s%-26s  %10s  %8s  %9s  %8s  %7s  %8s%s\n", bold,
+			"Strategy", "Total Ret", "Sharpe", "Sortino", "Max DD", "Trades", "Exposure", reset)
+		fmt.Printf("  %s\n", strings.Repeat("─", 86))
 		rows := []struct {
 			name string
 			r    backtest.Result
 		}{
 			{"Walk-forward optimised", wf.Optimized},
 			{"Fixed default (±0.2)", wf.Fixed},
+			{"Fixed ±0.2, vol-targeted", wf.VolTargeted},
 			{"Buy & hold", wf.BuyHold},
 		}
 		for _, row := range rows {
@@ -250,9 +251,9 @@ func PrintWalkForward(results []backtest.WalkForwardResult) {
 			if row.r.TotalReturn < 0 {
 				col = red
 			}
-			fmt.Printf("  %-22s  %s%+9.1f%%%s  %8.2f  %9.2f  %s%7.1f%%%s  %7d\n",
+			fmt.Printf("  %-26s  %s%+9.1f%%%s  %8.2f  %9.2f  %s%7.1f%%%s  %7d  %7.0f%%\n",
 				row.name, col, row.r.TotalReturn, reset, row.r.SharpeRatio, row.r.SortinoRatio,
-				red, -row.r.MaxDrawdown, reset, row.r.TotalTrades)
+				red, -row.r.MaxDrawdown, reset, row.r.TotalTrades, row.r.Exposure)
 		}
 
 		fmt.Printf("\n  %sFold  Test days   Chosen entry/exit   Train Sharpe   Test return%s\n", dim, reset)

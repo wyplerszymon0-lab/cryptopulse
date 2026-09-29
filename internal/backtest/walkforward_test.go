@@ -1,6 +1,7 @@
 package backtest
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 
@@ -25,7 +26,7 @@ func TestSimulate_FillsNextDayWithCommission(t *testing.T) {
 	nan := math.NaN()
 	scores := []float64{1, nan, -1, nan, nan} // buy on day 0, sell on day 2
 
-	sim := simulate(prices, scores, DefaultParams, 0, len(prices), 1000)
+	sim := simulate(prices, scores, DefaultParams, 0, len(prices), 1000, nil)
 
 	if len(sim.trades) != 1 {
 		t.Fatalf("trades = %d, want 1", len(sim.trades))
@@ -47,7 +48,7 @@ func TestSimulate_FillsNextDayWithCommission(t *testing.T) {
 func TestSimulate_ClosesOpenPositionAtWindowEnd(t *testing.T) {
 	prices := []float64{100, 100, 200, 300}
 	scores := []float64{1, math.NaN(), math.NaN(), math.NaN()}
-	sim := simulate(prices, scores, DefaultParams, 0, 3, 1000) // window ends on day 2
+	sim := simulate(prices, scores, DefaultParams, 0, 3, 1000, nil) // window ends on day 2
 
 	if len(sim.trades) != 1 || sim.trades[0].ExitIndex != 2 {
 		t.Fatalf("want one trade closed on day 2, got %+v", sim.trades)
@@ -94,7 +95,7 @@ func TestWalkForward_FoldsTileTheOutOfSamplePeriod(t *testing.T) {
 		t.Errorf("folds end at %d, want %d", next, len(prices))
 	}
 	oosDays := len(prices) - res.OOSStart
-	for name, r := range map[string]Result{"optimized": res.Optimized, "fixed": res.Fixed, "buy_hold": res.BuyHold} {
+	for name, r := range map[string]Result{"optimized": res.Optimized, "fixed": res.Fixed, "vol_targeted": res.VolTargeted, "buy_hold": res.BuyHold} {
 		if len(r.Equity) != oosDays {
 			t.Errorf("%s equity length = %d, want %d", name, len(r.Equity), oosDays)
 		}
@@ -163,5 +164,66 @@ func TestDefaultGrid_ExitBelowEntry(t *testing.T) {
 	}
 	if !found {
 		t.Error("grid should contain the default parameters")
+	}
+}
+
+func TestVolTargetSizing(t *testing.T) {
+	got := VolTargetSizing([]float64{0.01, 0.02, 0.04, math.NaN(), 0}, 0.02)
+	want := []float64{1, 1, 0.5, 1, 1}
+	for i := range want {
+		if !approx(got[i], want[i]) {
+			t.Errorf("size[%d] = %v, want %v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestSimulate_PartialPositionKeepsTheRestInCash(t *testing.T) {
+	prices := []float64{100, 100, 200, 200}
+	nan := math.NaN()
+	scores := []float64{1, nan, -1, nan} // buy on day 0 (fills day 1), sell on day 2 (fills day 3)
+	sim := simulate(prices, scores, DefaultParams, 0, len(prices), 1000, []float64{0.5, 1, 1, 1})
+
+	units := 500 * (1 - CommissionRate) / 100
+	if !approx(sim.equity[2], 500+units*200) {
+		t.Errorf("day-2 equity = %v, want half in cash + half marked to market = %v", sim.equity[2], 500+units*200)
+	}
+	if !approx(sim.equity[3], 500+units*200*(1-CommissionRate)) {
+		t.Errorf("final equity = %v", sim.equity[3])
+	}
+	if !approx(sim.exposure[1], units*100/(500+units*100)) || sim.exposure[0] != 0 || sim.exposure[3] != 0 {
+		t.Errorf("exposure = %v", sim.exposure)
+	}
+}
+
+func TestWalkForward_VolTargetingNeverInvestsMoreThanAllIn(t *testing.T) {
+	res, err := WalkForward(predictor.NewEngine(wavePrices(300)), DefaultWalkForward())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.VolTargeted.Exposure > res.Fixed.Exposure+1e-9 {
+		t.Errorf("vol-targeted exposure %.1f%% > all-in %.1f%%", res.VolTargeted.Exposure, res.Fixed.Exposure)
+	}
+	if res.VolTargeted.TotalTrades != res.Fixed.TotalTrades {
+		t.Errorf("same signals should give the same trades: %d vs %d", res.VolTargeted.TotalTrades, res.Fixed.TotalTrades)
+	}
+	if !approx(res.BuyHold.Exposure, 100) {
+		t.Errorf("buy-and-hold exposure = %v, want 100", res.BuyHold.Exposure)
+	}
+}
+
+func TestWalkForward_ResultsEncodeAsJSON(t *testing.T) {
+	// The dashboard export marshals these; encoding/json rejects NaN, so every
+	// metric must be finite (the stitched optimised run once lost its exposure).
+	res, err := WalkForward(predictor.NewEngine(wavePrices(300)), DefaultWalkForward())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, r := range map[string]Result{"optimized": res.Optimized, "fixed": res.Fixed, "vol_targeted": res.VolTargeted, "buy_hold": res.BuyHold} {
+		if math.IsNaN(r.Exposure) || r.Exposure < 0 || r.Exposure > 100 {
+			t.Errorf("%s exposure = %v", name, r.Exposure)
+		}
+	}
+	if _, err := json.Marshal(res); err != nil {
+		t.Errorf("json.Marshal: %v", err)
 	}
 }
