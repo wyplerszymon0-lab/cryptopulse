@@ -221,6 +221,8 @@ Flags:
   --optimize    walk-forward optimisation: tune in-sample, score out-of-sample
   --train-days  walk-forward training window  (default 120)
   --test-days   walk-forward test window  (default 30)
+  --grid        walk-forward threshold grid, e.g. entry=0.1:0.5:0.1,exit=-0.5:0.1:0.1
+                (start:stop:step or one value per key; default: built-in 29 pairs)
   --export      write analysis + walk-forward results with price history to a JSON file
   --json        output as JSON (pipe-friendly)
   --workers     concurrent fetch goroutines  (default 3)
