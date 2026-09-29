@@ -4,6 +4,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const STRATEGIES = [
   { key: "optimized", name: "Walk-forward optimised", short: "Optimised", color: "--series-1" },
   { key: "fixed_default", name: "Fixed thresholds (±0.2)", short: "Fixed", color: "--series-2" },
+  { key: "vol_targeted", name: "Fixed ±0.2, vol-targeted", short: "Vol-targeted", color: "--series-4" },
   { key: "buy_hold", name: "Buy & hold", short: "Buy & hold", color: "--series-3" },
 ];
 
@@ -216,6 +217,7 @@ function renderTables(wf, times) {
       el("td", {}, fmtNum(r.sortino_ratio)),
       el("td", {}, fmtPct(-r.max_drawdown_pct)),
       el("td", {}, s.key === "buy_hold" ? "—" : String(r.total_trades)),
+      el("td", {}, `${Math.round(r.avg_exposure_pct)}%`),
     );
     body.append(tr);
   }

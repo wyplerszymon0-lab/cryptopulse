@@ -37,6 +37,10 @@ type Params struct {
 	Exit  float64 `json:"exit"`  // sell when long and score <= Exit
 }
 
+// DefaultVolTarget is the daily volatility the vol-targeted strategy aims for.
+// Crypto majors typically move 2–5% a day, so 2% scales most entries down.
+const DefaultVolTarget = 0.02
+
 // DefaultParams reproduce the engine's signal labels: enter on BUY or better
 // (score >= 0.2), exit on SELL or worse (score <= -0.2).
 var DefaultParams = Params{Entry: 0.2, Exit: -0.2}
@@ -69,6 +73,7 @@ type Result struct {
 	WinRate      float64 `json:"win_rate_pct"`
 	TotalTrades  int     `json:"total_trades"`
 	ProfitFactor float64 `json:"profit_factor"`
+	Exposure     float64 `json:"avg_exposure_pct"` // average share of capital in the coin
 
 	// Metadata
 	DataPoints int       `json:"data_points"`
@@ -85,18 +90,44 @@ type Predictor interface {
 // Scores returns the lookahead-free composite score for every day. Days that
 // cannot trade (the warmup period, the last day, or a failed prediction) are NaN.
 func Scores(eng Predictor) []float64 {
-	n := len(eng.Prices())
-	scores := make([]float64, n)
+	scores, _ := Signals(eng)
+	return scores
+}
+
+// Signals returns, for every day, the lookahead-free composite score and the
+// daily volatility estimate ATR(14) / price, both computed from prices[0..i].
+// Days that cannot trade are NaN in both.
+func Signals(eng Predictor) (scores, vol []float64) {
+	prices := eng.Prices()
+	n := len(prices)
+	scores, vol = make([]float64, n), make([]float64, n)
 	for i := range scores {
-		scores[i] = math.NaN()
+		scores[i], vol[i] = math.NaN(), math.NaN()
 		if i < WarmupPeriod || i >= n-1 {
 			continue
 		}
 		if r, err := eng.PredictAt(i); err == nil {
 			scores[i] = r.Score
+			if r.Indicators.ATR > 0 {
+				vol[i] = r.Indicators.ATR / prices[i]
+			}
 		}
 	}
-	return scores
+	return scores, vol
+}
+
+// VolTargetSizing turns daily volatility into the share of capital to put in on
+// each entry so the position's daily volatility is about `target`: all of it
+// when the market is calm, less when it is volatile. Unknown volatility → 1.
+func VolTargetSizing(vol []float64, target float64) []float64 {
+	size := make([]float64, len(vol))
+	for i, v := range vol {
+		size[i] = 1
+		if v > 0 && !math.IsNaN(v) {
+			size[i] = math.Min(1, target/v)
+		}
+	}
+	return size
 }
 
 // Run backtests the default thresholds over the engine's full price series.
@@ -111,7 +142,7 @@ func RunWithParams(eng Predictor, p Params) (Result, error) {
 	if n < MinDataPoints {
 		return Result{}, fmt.Errorf("backtest requires at least %d prices, have %d", MinDataPoints, n)
 	}
-	sim := simulate(prices, Scores(eng), p, 0, n, InitialCapital)
+	sim := simulate(prices, Scores(eng), p, 0, n, InitialCapital, nil)
 	res := summarize(sim, InitialCapital)
 	// Buy-and-hold is measured from the end of the warmup period to avoid penalising
 	// the strategy for the period it was not yet active.
@@ -122,15 +153,17 @@ func RunWithParams(eng Predictor, p Params) (Result, error) {
 
 // simulation is the raw outcome of trading one window.
 type simulation struct {
-	equity []float64 // portfolio value at the close of each day in the window
-	trades []Trade
+	equity   []float64 // portfolio value at the close of each day in the window
+	exposure []float64 // share of that value held in the coin
+	trades   []Trade
 }
 
 // simulate trades days [from, to) starting flat with `capital`. A decision on day
 // i fills at the close of day i+1; any position still open is closed at the close
-// of day to-1, so the window always ends in cash.
-func simulate(prices, scores []float64, p Params, from, to int, capital float64) simulation {
-	sim := simulation{equity: make([]float64, 0, to-from)}
+// of day to-1, so the window always ends in cash. `size[i]` is the share of cash
+// invested on an entry decided on day i; nil means all of it.
+func simulate(prices, scores []float64, p Params, from, to int, capital float64, size []float64) simulation {
+	sim := simulation{equity: make([]float64, 0, to-from), exposure: make([]float64, 0, to-from)}
 	cash, holdings := capital, 0.0
 	inPos := false
 	var entryIdx int
@@ -138,7 +171,7 @@ func simulate(prices, scores []float64, p Params, from, to int, capital float64)
 
 	closePosition := func(idx int) {
 		price := prices[idx]
-		cash = holdings * price * (1 - CommissionRate)
+		cash += holdings * price * (1 - CommissionRate)
 		ret := pctChange(entryPrice, price)
 		sim.trades = append(sim.trades, Trade{
 			EntryIndex: entryIdx, ExitIndex: idx,
@@ -152,11 +185,9 @@ func simulate(prices, scores []float64, p Params, from, to int, capital float64)
 		if i == to-1 && inPos {
 			closePosition(i)
 		}
-		if inPos {
-			sim.equity = append(sim.equity, holdings*prices[i])
-		} else {
-			sim.equity = append(sim.equity, cash)
-		}
+		invested := holdings * prices[i]
+		sim.equity = append(sim.equity, cash+invested)
+		sim.exposure = append(sim.exposure, invested/(cash+invested))
 
 		if i >= to-1 || math.IsNaN(scores[i]) {
 			continue
@@ -164,9 +195,13 @@ func simulate(prices, scores []float64, p Params, from, to int, capital float64)
 		next := i + 1
 		switch {
 		case !inPos && scores[i] >= p.Entry:
-			holdings = cash * (1 - CommissionRate) / prices[next]
+			stake := cash
+			if size != nil {
+				stake = cash * size[i]
+			}
+			holdings = stake * (1 - CommissionRate) / prices[next]
 			entryPrice, entryIdx = prices[next], next
-			cash, inPos = 0, true
+			cash, inPos = cash-stake, true
 		case inPos && scores[i] <= p.Exit:
 			closePosition(next)
 		}
@@ -189,6 +224,7 @@ func summarize(sim simulation, capital float64) Result {
 		WinRate:          winRate,
 		TotalTrades:      len(sim.trades),
 		ProfitFactor:     profitFactor,
+		Exposure:         mean(sim.exposure) * 100,
 		Trades:           sim.trades,
 		Equity:           eq,
 	}

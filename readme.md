@@ -106,6 +106,20 @@ Across BTC, ETH and SOL over the same 216 out-of-sample days (Feb–Sep 2026):
 
 - **Tuning the thresholds does not help.** The in-sample winner beats the fixed default on only one coin out of three: the best parameters for the last 120 days mostly do not carry over to the next 30. That is overfitting, and it only shows up because the evaluation is out-of-sample.
 - **In a rising market the signal lags buy-and-hold on return, but roughly halves the drawdown.** Over the full year, which included a ~25% BTC decline, the same fixed strategy beat buy-and-hold by 21–44 percentage points by staying out of the fall (see the backtest table above).
+
+### Volatility targeting
+
+The fourth strategy uses the same ±0.2 signals but sizes each entry to aim for 2% daily volatility: it invests `min(1, 0.02 / (ATR₁₄ / price))` of its cash, so it goes all in when the market is calm and less when it is jumpy. Same 216 out-of-sample days, run on 29 Sep 2026:
+
+| Coin | All in: return / Sharpe / max DD / exposure | Vol-targeted: return / Sharpe / max DD / exposure |
+|---|---|---|
+| BTC | −1.9% / −0.02 / −14.6% / 54% | −2.7% / −0.10 / −14.6% / 52% |
+| ETH | +15.2% / 0.87 / −19.8% / 44% | **+16.5% / 1.06 / −15.1%** / 38% |
+| SOL | +24.5% / 1.13 / −23.2% / 50% | **+24.3% / 1.26 / −17.2%** / 40% |
+
+- **On ETH and SOL it keeps the return and cuts the drawdown by 5–6 points**, lifting the Sharpe ratio, while holding less of the coin on average.
+- **On BTC it changes almost nothing**: BTC's daily volatility is mostly near the 2% target, so positions are rarely scaled down (exposure 54% → 52%).
+- *Exposure* is the average share of capital in the coin; it is reported for every strategy because comparing a half-invested strategy with an all-in one on return alone is misleading.
 ---
 
 ## Architecture
@@ -169,6 +183,7 @@ Composite score is normalised over the weights of indicators that could be compu
 - **Position sizing**: 100% of available capital per trade (long-only, no leverage).
 - **Warmup**: the first 30 days initialise indicators; trading begins on day 31.
 - **Strategy**: enter when the composite score is ≥ `entry`, exit when it is ≤ `exit`. The defaults (+0.2 / −0.2) match the BUY and SELL signal labels.
+- **Volatility targeting** (4th strategy): same signals as the fixed ±0.2 thresholds, entries sized to `min(1, 0.02 / (ATR₁₄ / price))` of cash using only data up to the signal day.
 - **Walk-forward optimisation**: after warmup, a 120-day training window picks the (entry, exit) pair with the best Sharpe ratio from a 29-point grid; the next 30 days are traded with it; then the window rolls forward 30 days. Test windows start flat and end in cash, and their results are compounded.
 - **Sharpe ratio**: annualised with √365 (crypto trades every day), zero risk-free rate.
 - **Sortino ratio**: mean return over downside deviation, √(mean(min(r, 0)²)) across *all* days, annualised with √365.
