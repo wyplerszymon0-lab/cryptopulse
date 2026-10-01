@@ -1,0 +1,38 @@
+name: Release
+
+# Pushing a tag such as v2.1.0 runs the tests, then builds binaries for
+# Linux, macOS and Windows and publishes them with that version's CHANGELOG entry.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test
+        run: go test ./...
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v head="## [${GITHUB_REF_NAME#v}]" '
+            index($0, head) == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md || { echo "No CHANGELOG entry for $GITHUB_REF_NAME"; exit 1; }
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean --release-notes release-notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

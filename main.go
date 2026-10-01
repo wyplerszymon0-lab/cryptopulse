@@ -18,7 +18,8 @@ import (
 	"github.com/wyplerszymon0-lab/cryptopulse/internal/report"
 )
 
-const version = "2.1.0"
+// version is overridden at release time: -ldflags "-X main.version=<tag>"
+var version = "2.1.0"
 
 func main() {
 	coinsStr := flag.String("coins", "bitcoin,ethereum,solana", "comma-separated CoinGecko coin IDs")

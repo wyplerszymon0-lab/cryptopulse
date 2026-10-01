@@ -193,6 +193,10 @@ Composite score is normalised over the weights of indicators that could be compu
 
 ## Quick Start
 
+**No Go needed:** download a prebuilt binary for Linux, macOS or Windows from the [latest release](https://github.com/wyplerszymon0-lab/cryptopulse/releases/latest), unpack it and run `cryptopulse --optimize --days 365`.
+
+**From source:**
+
 ```bash
 # Prerequisites: Go 1.22+, internet connection (CoinGecko public API, no key needed)
 git clone https://github.com/wyplerszymon0-lab/cryptopulse

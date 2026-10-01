@@ -1,3 +1,4 @@
 *.exe
 predictor
 web/data.json
+dist/
