@@ -28,11 +28,11 @@ jobs:
             index($0, head) == 1 { found = 1; next }
             found && /^## / { exit }
             found { print }
-          ' CHANGELOG.md > release-notes.md
-          test -s release-notes.md || { echo "No CHANGELOG entry for $GITHUB_REF_NAME"; exit 1; }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md" || { echo "No CHANGELOG entry for $GITHUB_REF_NAME"; exit 1; }
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
-          args: release --clean --release-notes release-notes.md
+          args: release --clean --release-notes ${{ runner.temp }}/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
