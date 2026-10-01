@@ -5,6 +5,10 @@ on:
     branches: [main, master]
   pull_request:
 
+# CI only reads the code.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Test & Vet
