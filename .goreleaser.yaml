@@ -26,6 +26,7 @@ archives:
 checksum:
   name_template: checksums.txt
 
-# Release notes come from CHANGELOG.md (passed with --release-notes).
-changelog:
-  disable: true
+# Release notes come from CHANGELOG.md (passed with --release-notes), which
+# replaces the generated changelog. Do not set changelog.disable: it drops them too.
+release:
+  name_template: "CryptoPulse v{{ .Version }}"
