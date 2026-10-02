@@ -149,7 +149,7 @@ func fetchAll(ctx context.Context, client *api.CoinGeckoClient, coins []string, 
 
 func runAnalysis(ctx context.Context, client *api.CoinGeckoClient, coins []string, days, workers int, asJSON bool) {
 	if !asJSON {
-		report.PrintHeader(version)
+		report.PrintHeader(os.Stdout, version)
 	}
 
 	start := time.Now()
@@ -189,13 +189,13 @@ func runAnalysis(ctx context.Context, client *api.CoinGeckoClient, coins []strin
 	}
 
 	for _, r := range results {
-		report.PrintResult(r)
+		report.PrintResult(os.Stdout, r)
 	}
 }
 
 func runBacktest(ctx context.Context, client *api.CoinGeckoClient, coins []string, days int, asJSON bool) {
 	if !asJSON {
-		report.PrintHeader(version)
+		report.PrintHeader(os.Stdout, version)
 		fmt.Printf("Running walk-forward backtest: %d coin(s) × %d days…\n", len(coins), days)
 	}
 
@@ -227,13 +227,13 @@ func runBacktest(ctx context.Context, client *api.CoinGeckoClient, coins []strin
 		return
 	}
 
-	report.PrintBacktestSummary(btResults)
+	report.PrintBacktestSummary(os.Stdout, btResults)
 }
 
 func runOptimize(ctx context.Context, client *api.CoinGeckoClient, coins []string, days, workers int,
 	cfg backtest.WalkForwardConfig, asJSON bool) {
 	if !asJSON {
-		report.PrintHeader(version)
+		report.PrintHeader(os.Stdout, version)
 		fmt.Printf("Walk-forward optimisation: %d coin(s) × %d days, train %d / test %d, %d parameter sets…\n",
 			len(coins), days, cfg.TrainDays, cfg.TestDays, len(cfg.Grid))
 	}
@@ -257,7 +257,7 @@ func runOptimize(ctx context.Context, client *api.CoinGeckoClient, coins []strin
 		writeJSON(os.Stdout, results)
 		return
 	}
-	report.PrintWalkForward(results)
+	report.PrintWalkForward(os.Stdout, results)
 }
 
 // exportCoin is one coin's entry in the --export file consumed by the web dashboard.
