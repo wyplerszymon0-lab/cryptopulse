@@ -4,7 +4,7 @@
   ETHEREUM  out-of-sample: last 60 days, 2 folds
 
   Strategy                     Total Ret    Sharpe    Sortino    Max DD   Trades  Exposure
-  ──────────────────────────────────────────────────────────────────────────────────────
+  ────────────────────────────────────────────────────────────────────────────────────────
   Walk-forward optimised           +1.2%      0.15       0.21    -12.4%        6       48%
   Fixed default (±0.2)             +3.4%      0.42       0.60    -10.1%        5       52%
   Fixed ±0.2, vol-targeted         +2.8%      0.55       0.79     -6.3%        5       31%

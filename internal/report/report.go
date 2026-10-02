@@ -65,14 +65,14 @@ func PrintResult(w io.Writer, r predictor.Result) {
 	ind := r.Indicators
 
 	rsiCol, rsiLbl := rsiStatus(ind.RSI)
-	fmt.Fprintf(w, "  %-24s  %6.1f   %s%s%s\n", "RSI (14)", ind.RSI, rsiCol, rsiLbl, reset)
+	indicatorRow(w, "RSI (14)", fmt.Sprintf("%.1f", ind.RSI), rsiCol+rsiLbl+reset)
 
 	macdDir := green + "▲ Bullish"
 	if ind.MACDHist < 0 {
 		macdDir = red + "▼ Bearish"
 	}
-	fmt.Fprintf(w, "  %-24s  %+7.2f   %s%s (hist %+.2f)%s\n",
-		"MACD Line", ind.MACDLine, macdDir, dim, ind.MACDHist, reset)
+	indicatorRow(w, "MACD Line", fmt.Sprintf("%+.2f", ind.MACDLine),
+		fmt.Sprintf("%s%s (hist %+.2f)%s", macdDir, dim, ind.MACDHist, reset))
 
 	bbLbl := yellowStr("Mid-band")
 	if ind.BBPosition < 0.2 {
@@ -80,14 +80,13 @@ func PrintResult(w io.Writer, r predictor.Result) {
 	} else if ind.BBPosition > 0.8 {
 		bbLbl = redStr("Near upper  (overextended)")
 	}
-	fmt.Fprintf(w, "  %-24s  %5.1f%%   %s\n", "Bollinger Position", ind.BBPosition*100, bbLbl)
+	indicatorRow(w, "Bollinger Position", fmt.Sprintf("%.1f%%", ind.BBPosition*100), bbLbl)
 
 	crossLbl := greenStr("Golden Cross  ▲")
 	if ind.SMAFast < ind.SMASlow {
 		crossLbl = redStr("Death Cross  ▼")
 	}
-	fmt.Fprintf(w, "  %-24s  %-9s  %s\n", "SMA 7 / 20",
-		fmt.Sprintf("%s / %s", fmtShort(ind.SMAFast), fmtShort(ind.SMASlow)), crossLbl)
+	indicatorRow(w, "SMA 7 / 20", fmtShort(ind.SMAFast)+" / "+fmtShort(ind.SMASlow), crossLbl)
 
 	if ind.ATR > 0 {
 		volPct := ind.ATR / r.CurrentPrice * 100
@@ -97,8 +96,8 @@ func PrintResult(w io.Writer, r predictor.Result) {
 		} else if volPct < 2 {
 			volLbl = greenStr("low")
 		}
-		fmt.Fprintf(w, "  %-24s  %-9s  %s volatility (%.1f%%/day)\n",
-			"ATR (14)", indicators.FmtMoney(ind.ATR), volLbl, volPct)
+		indicatorRow(w, "ATR (14)", indicators.FmtMoney(ind.ATR),
+			fmt.Sprintf("%s volatility (%.1f%%/day)", volLbl, volPct))
 	}
 
 	if ind.StochK > 0 || ind.StochD > 0 {
@@ -108,12 +107,13 @@ func PrintResult(w io.Writer, r predictor.Result) {
 		} else if ind.StochK > 80 && ind.StochD > 80 {
 			stLbl = redStr("Overbought")
 		}
-		fmt.Fprintf(w, "  %-24s  K:%-5.1f D:%-5.1f  %s\n", "Stochastic (14,3)", ind.StochK, ind.StochD, stLbl)
+		indicatorRow(w, "Stochastic (14,3)", fmt.Sprintf("K:%.1f D:%.1f", ind.StochK, ind.StochD), stLbl)
 	}
 
 	// Risk / confidence bar
 	fmt.Fprintf(w, "\n  %s─ Risk Profile ────────────────────────────────%s\n", cyan, reset)
-	fmt.Fprintf(w, "  %-24s  %.1f%%   %s\n\n", "Confidence", r.Confidence, confidenceBar(r.Confidence))
+	indicatorRow(w, "Confidence", fmt.Sprintf("%.1f%%", r.Confidence), confidenceBar(r.Confidence))
+	fmt.Fprintln(w)
 }
 
 // PrintBacktestSummary writes a comparison table of backtest results to w.
@@ -125,10 +125,11 @@ func PrintBacktestSummary(w io.Writer, results []backtest.Result) {
 
 	fmt.Fprintf(w, "\n%s━━━━━━━━━━━━━━━━━━━━━━━━━━ BACKTEST RESULTS ━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n", bold+cyan, reset)
 
-	hdr := fmt.Sprintf("  %-10s  %-10s  %-10s  %-8s  %-9s  %-9s  %-9s  %-7s  %-10s",
+	// Header widths match the value formats below (sign, digits and unit included).
+	hdr := fmt.Sprintf("  %-10s  %9s  %9s  %8s  %9s  %9s  %9s  %7s  %10s",
 		"Coin", "Total Ret", "Ann. Ret", "Sharpe", "Sortino", "Max DD", "Win Rate", "Trades", "vs B&H")
 	fmt.Fprintf(w, "%s%s%s\n", bold, hdr, reset)
-	fmt.Fprintf(w, "  %s\n", strings.Repeat("─", 94))
+	fmt.Fprintf(w, "  %s\n", strings.Repeat("─", 96))
 
 	for _, r := range results {
 		vsB := r.TotalReturn - r.BuyHoldReturn
@@ -161,6 +162,13 @@ func PrintBacktestSummary(w io.Writer, results []backtest.Result) {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+// indicatorRow keeps every value right-aligned in one column, with labels
+// starting at the same position. value must be plain ASCII (no colour codes),
+// because the padding counts bytes.
+func indicatorRow(w io.Writer, name, value, label string) {
+	fmt.Fprintf(w, "  %-24s  %13s   %s\n", name, value, label)
+}
 
 func signalColor(s predictor.Signal) string {
 	if s >= predictor.Buy {
@@ -237,7 +245,7 @@ func PrintWalkForward(w io.Writer, results []backtest.WalkForwardResult) {
 			bold, strings.ToUpper(wf.CoinID), reset, dim, days, len(wf.Folds), reset)
 		fmt.Fprintf(w, "  %s%-26s  %10s  %8s  %9s  %8s  %7s  %8s%s\n", bold,
 			"Strategy", "Total Ret", "Sharpe", "Sortino", "Max DD", "Trades", "Exposure", reset)
-		fmt.Fprintf(w, "  %s\n", strings.Repeat("─", 86))
+		fmt.Fprintf(w, "  %s\n", strings.Repeat("─", 88))
 		rows := []struct {
 			name string
 			r    backtest.Result
