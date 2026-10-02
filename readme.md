@@ -189,6 +189,21 @@ Composite score is normalised over the weights of indicators that could be compu
 - **Sortino ratio**: mean return over downside deviation, √(mean(min(r, 0)²)) across *all* days, annualised with √365.
 - **Max drawdown**: peak-to-trough portfolio decline over the simulation.
 - **Profit factor**: sum of winning trade returns ÷ sum of losing trade returns.
+
+### Performance
+
+Lookahead-free scoring is the simplest correct way: for every day *i* the engine recomputes all indicators from `prices[0..i]`, so building the score series is O(n²). It was kept on purpose, because at the sizes the CLI uses it costs almost nothing:
+
+| Days | `Scores` (one coin) | Full walk-forward (one coin) |
+| ---: | ---: | ---: |
+| 90 | 0.17 ms | – |
+| 365 (CLI maximum) | 3.2 ms | 3.6 ms |
+| 1000 | 23 ms | 25 ms |
+| 3000 | 193 ms | 201 ms |
+
+<sub>`make bench` (`BenchmarkScores`, `BenchmarkWalkForward` in `internal/backtest`), AMD Ryzen 5 220, Go 1.27, median of 3 runs.</sub>
+
+A real `--optimize --days 365` run for BTC, ETH and SOL took 1.37 s end to end, so scoring (about 10 ms) is under 1% of it. The rest is waiting for the CoinGecko API. An incremental version would have to carry the state of every indicator (Wilder-smoothed RSI and ATR, MACD's EMAs, the rolling windows) and reproduce the same floating-point results. That is a lot of code to get a negligible speed-up. It becomes worth doing if the series grow to many thousands of days, for example with hourly candles.
 ---
 
 ## Quick Start
