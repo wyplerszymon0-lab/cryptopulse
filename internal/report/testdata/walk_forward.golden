@@ -1,0 +1,20 @@
+
+━━━━━━━━━━━━━━━━━━━━━ WALK-FORWARD OPTIMISATION ━━━━━━━━━━━━━━━━━━━━━
+
+  ETHEREUM  out-of-sample: last 60 days, 2 folds
+
+  Strategy                     Total Ret    Sharpe    Sortino    Max DD   Trades  Exposure
+  ──────────────────────────────────────────────────────────────────────────────────────
+  Walk-forward optimised           +1.2%      0.15       0.21    -12.4%        6       48%
+  Fixed default (±0.2)             +3.4%      0.42       0.60    -10.1%        5       52%
+  Fixed ±0.2, vol-targeted         +2.8%      0.55       0.79     -6.3%        5       31%
+  Buy & hold                       -5.6%     -0.20      -0.27    -18.9%        1      100%
+
+  Fold  Test days   Chosen entry/exit   Train Sharpe   Test return
+     1  120–149      +0.3 / -0.1            1.25          +4.2%
+     2  150–179      +0.2 / -0.2            0.87          -2.9%
+
+  Parameters are chosen by in-sample Sharpe on each training window and only
+  scored on the following test window, so every number above is out-of-sample.
+  WARNING: Past performance does not predict future results.
+

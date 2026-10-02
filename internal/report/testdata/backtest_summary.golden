@@ -1,0 +1,14 @@
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━ BACKTEST RESULTS ━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Coin        Total Ret   Ann. Ret    Sharpe    Sortino    Max DD     Win Rate   Trades   vs B&H    
+  ──────────────────────────────────────────────────────────────────────────────────────────────
+  BITCOIN        +18.4%      +9.1%      0.71       1.02     -21.3%      55.6%        9      -6.6%p
+  SOLANA          -7.2%      -3.6%     -0.12      -0.18     -34.8%      40.0%       15     +23.2%p
+
+  2  coin(s) backtested
+  Trades fill at next-day close · 0.1% commission per side · long-only
+  vs B&H: percentage-point difference vs buying and holding from warmup day
+
+  WARNING: Past performance does not predict future results.
+
