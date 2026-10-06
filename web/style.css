@@ -111,6 +111,8 @@ figcaption { margin-bottom: 8px; }
 .chart .oos-label { fill: var(--text-muted); font-size: 11px; }
 .chart .end-label { font-size: 12px; fill: var(--text-secondary); }
 .chart .hair { stroke: var(--text-muted); stroke-width: 1; }
+.chart .fold { stroke: var(--axis); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.6; }
+.chart .fold-label { fill: var(--text-muted); font-size: 10px; }
 .chart .dot { stroke: var(--surface-1); stroke-width: 2; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 8px; font-size: 13px; color: var(--text-secondary); }
@@ -139,6 +141,7 @@ details p { margin: 8px 0; }
   font-size: 13px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); min-width: 160px;
 }
 .tooltip .tt-date { color: var(--text-secondary); margin-bottom: 4px; }
+.tooltip .tt-context { color: var(--text-secondary); font-size: 12px; margin: -2px 0 6px; }
 .tooltip .tt-row { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
 .tooltip .tt-row strong { font-variant-numeric: tabular-nums; }
 .tooltip .tt-name { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }

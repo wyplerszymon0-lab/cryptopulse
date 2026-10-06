@@ -16,6 +16,8 @@ const fmtUSD = (v) =>
   "$" + v.toLocaleString("en-US", { maximumFractionDigits: v >= 100 ? 0 : v >= 1 ? 2 : 4, minimumFractionDigits: v >= 100 ? 0 : 2 });
 const fmtPct = (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1) + "%";
 const fmtNum = (v) => (v < 0 ? "−" : "") + Math.abs(v).toFixed(2);
+const fmtSigned1 = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
+const fmtThresholds = (p) => `${fmtSigned1(p.entry)} / ${fmtSigned1(p.exit)}`;
 const fmtDate = (ms) => new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 const coinName = (id) => id.charAt(0).toUpperCase() + id.slice(1);
 
@@ -71,8 +73,10 @@ function monthTicks(times) {
 /**
  * Draw a line chart with a crosshair tooltip.
  * series: [{ name, color (css var), values }], all aligned to `times`.
+ * markers: optional [{ index, label }] drawn as faint vertical lines.
+ * context: optional (i) => string shown under the date in the tooltip.
  */
-function lineChart(container, { times, series, yFormat, shadeFrom, endLabels }) {
+function lineChart(container, { times, series, yFormat, shadeFrom, endLabels, markers = [], context }) {
   container.replaceChildren();
   const width = Math.max(container.clientWidth, 280);
   const narrow = width < 560;
@@ -101,6 +105,11 @@ function lineChart(container, { times, series, yFormat, shadeFrom, endLabels }) 
   for (const v of yTicks) {
     svg.append(el("svg:line", { class: v === y0 ? "baseline" : "grid", x1: pad.left, x2: pad.left + innerW, y1: y(v), y2: y(v) }));
     svg.append(el("svg:text", { class: "tick", x: pad.left - 8, y: y(v) + 4, "text-anchor": "end" }, yFormat(v)));
+  }
+
+  for (const m of markers) {
+    svg.append(el("svg:line", { class: "fold", x1: x(m.index), x2: x(m.index), y1: pad.top, y2: pad.top + innerH }));
+    if (!narrow) svg.append(el("svg:text", { class: "fold-label", x: x(m.index) + 3, y: pad.top + 10 }, m.label));
   }
 
   const months = monthTicks(times);
@@ -144,6 +153,8 @@ function lineChart(container, { times, series, yFormat, shadeFrom, endLabels }) 
     });
 
     tooltip.replaceChildren(el("div", { class: "tt-date" }, fmtDate(times[i])));
+    const note = context?.(i);
+    if (note) tooltip.append(el("div", { class: "tt-context" }, note));
     for (const s of series) {
       const row = el("div", { class: "tt-row" });
       const name = el("span", { class: "tt-name" });
@@ -229,7 +240,7 @@ function renderTables(wf, times) {
     tr.append(
       el("td", {}, String(i + 1)),
       el("td", {}, `${fmtDate(times[f.test_start])} – ${fmtDate(times[f.test_end - 1])}`),
-      el("td", {}, `${f.chosen.entry >= 0 ? "+" : "−"}${Math.abs(f.chosen.entry).toFixed(1)} / ${f.chosen.exit >= 0 ? "+" : "−"}${Math.abs(f.chosen.exit).toFixed(1)}`),
+      el("td", {}, fmtThresholds(f.chosen)),
       el("td", {}, fmtNum(f.train_sharpe)),
       el("td", { class: f.test_return_pct > 0 ? "up" : f.test_return_pct < 0 ? "down" : "" }, fmtPct(f.test_return_pct)),
     );
@@ -257,7 +268,8 @@ function render() {
   const days = oosTimes.length;
   $("equity-note").textContent =
     `Last ${days} days (${fmtDate(oosTimes[0])} – ${fmtDate(oosTimes[days - 1])}), ${wf.folds.length} folds of ` +
-    `${state.data.test_days} days, each tuned on the preceding ${state.data.train_days} days over ${state.data.grid_size} threshold pairs.`;
+    `${state.data.test_days} days, each tuned on the preceding ${state.data.train_days} days over ${state.data.grid_size} threshold pairs. ` +
+    "Dotted lines mark where the next fold's thresholds take over; hover to see them.";
 
   const legend = $("equity-legend");
   legend.replaceChildren(...STRATEGIES.map((s) => {
@@ -266,11 +278,18 @@ function render() {
     return item;
   }));
 
+  // Fold boundaries, relative to the out-of-sample window the chart shows.
+  const folds = wf.folds.map((f, k) => ({ k, start: f.test_start - oos, end: f.test_end - oos, chosen: f.chosen }));
   lineChart($("equity-chart"), {
     times: oosTimes,
     series: STRATEGIES.map((s) => ({ name: s.name, short: s.short, color: s.color, values: wf[s.key].equity })),
     yFormat: fmtUSD,
     endLabels: true,
+    markers: folds.slice(1).map((f) => ({ index: f.start, label: `F${f.k + 1}` })),
+    context: (i) => {
+      const f = folds.find((g) => i >= g.start && i < g.end);
+      return f ? `Fold ${f.k + 1}: walk-forward entry / exit ${fmtThresholds(f.chosen)}` : null;
+    },
   });
 
   renderTables(wf, coin.times);
