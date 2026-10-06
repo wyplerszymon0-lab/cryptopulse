@@ -7,7 +7,7 @@
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
-**[Live dashboard →](https://wyplerszymon0-lab.github.io/cryptopulse/)** rebuilt every day by GitHub Actions: today's signals, price history and out-of-sample equity curves for BTC, ETH and SOL.
+**[Live dashboard →](https://wyplerszymon0-lab.github.io/cryptopulse/)** rebuilt every day by GitHub Actions: today's signals, price history and out-of-sample equity curves for BTC, ETH and SOL. The coin list is the repository variable `DASHBOARD_COINS` (comma-separated CoinGecko IDs, e.g. `bitcoin,ethereum,solana,cardano,avalanche-2`); without it the dashboard uses those three.
 
 ---
 

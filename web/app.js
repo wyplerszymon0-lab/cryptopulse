@@ -19,7 +19,10 @@ const fmtNum = (v) => (v < 0 ? "−" : "") + Math.abs(v).toFixed(2);
 const fmtSigned1 = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
 const fmtThresholds = (p) => `${fmtSigned1(p.entry)} / ${fmtSigned1(p.exit)}`;
 const fmtDate = (ms) => new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-const coinName = (id) => id.charAt(0).toUpperCase() + id.slice(1);
+// CoinGecko IDs to display names: "matic-network" -> "Matic Network";
+// a trailing number that only disambiguates the ID is dropped ("avalanche-2" -> "Avalanche").
+const coinName = (id) =>
+  id.replace(/-\d+$/, "").split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 
 function el(tag, attrs = {}, text) {
   const node = tag.startsWith("svg:") ? document.createElementNS(SVG_NS, tag.slice(4)) : document.createElement(tag);

@@ -29,10 +29,15 @@ jobs:
       - name: Test
         run: go test ./...
       - name: Generate data
+        # Coins come from the repository variable DASHBOARD_COINS (Settings ->
+        # Secrets and variables -> Actions -> Variables), comma-separated
+        # CoinGecko IDs. Passed through env, never pasted into the script.
+        env:
+          DASHBOARD_COINS: ${{ vars.DASHBOARD_COINS || 'bitcoin,ethereum,solana' }}
         run: |
           mkdir site
           cp web/index.html web/style.css web/app.js site/
-          go run . --days 365 --export site/data.json
+          go run . --days 365 --coins "$DASHBOARD_COINS" --export site/data.json
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
