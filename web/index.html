@@ -51,10 +51,17 @@
         <h2>Strategy comparison</h2>
         <div class="table-wrap">
           <table id="strategies">
-            <thead><tr><th scope="col">Strategy</th><th scope="col">Total return</th><th scope="col">Sharpe</th><th scope="col">Sortino</th><th scope="col">Max drawdown</th><th scope="col">Trades</th><th scope="col">Avg exposure</th></tr></thead>
+            <thead><tr><th scope="col">Strategy</th><th scope="col">Total return</th><th scope="col">Sharpe</th><th scope="col">Sortino</th><th scope="col">Max drawdown</th><th scope="col">Trades</th><th scope="col">Avg exposure</th><th scope="col">Timing vs chance</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
+        <p class="muted table-note" id="timing-note">
+          <strong>Timing vs chance</strong>: the strategy's own trades (same number, same holding days, same
+          commission) placed at random in the same period, 10,000 times. <em>p</em> is the share of those random
+          placements that did at least as well; a small <em>p</em> means the timing beat luck. Exposure is
+          identical, so this measures only <em>when</em> the strategy is in the market. Hover a value for the
+          random median and 5–95% range.
+        </p>
       </div>
 
       <details class="card">

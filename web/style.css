@@ -150,3 +150,5 @@ details p { margin: 8px 0; }
   .tile-value { font-size: 22px; }
   .top { flex-direction: column; }
 }
+
+.table-note { margin-top: 12px; font-size: 0.9em; line-height: 1.5; }
