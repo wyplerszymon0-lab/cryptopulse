@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Random-timing test**: each all-in strategy's trades placed at random in the same
+  window (same count, holding days and commission), 10,000 times; the CLI shows the
+  random median, 5–95 % range and a one-sided p-value after `--backtest` and
+  `--optimize`, and JSON gets `random_timing`. On BTC/ETH/SOL no result beats chance
+  (p ≥ 0.22). (#25)
+
 ## [2.1.0] - 2026-10-01
 
 First tagged release, with prebuilt binaries for Linux, macOS and Windows.

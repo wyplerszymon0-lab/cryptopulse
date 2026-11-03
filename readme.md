@@ -120,6 +120,20 @@ The fourth strategy uses the same ±0.2 signals but sizes each entry to aim for 
 - **On ETH and SOL it keeps the return and cuts the drawdown by 5–6 points**, lifting the Sharpe ratio, while holding less of the coin on average.
 - **On BTC it changes almost nothing**: BTC's daily volatility is mostly near the 2% target, so positions are rarely scaled down (exposure 54% → 52%).
 - *Exposure* is the average share of capital in the coin; it is reported for every strategy because comparing a half-invested strategy with an all-in one on return alone is misleading.
+
+### Is the timing better than chance?
+
+Beating buy-and-hold in a falling year can come from simply being out of the market, not from good timing. The **random-timing test** keeps a strategy's trades (how many, how many days each is held, the commission on both sides) and places them at random, without overlap, in the same window, 10,000 times. Exposure and trade count match the strategy, so only *when* it is in the market differs. The **p-value** is the share of random placements that did at least as well, (1 + #placements ≥ strategy) / (10,000 + 1) ([`permutation.go`](internal/backtest/permutation.go)). Run on 3 Nov 2026:
+
+| Coin | Whole year, fixed ±0.2: return / random median / p | Out-of-sample, fixed ±0.2 | Out-of-sample, walk-forward optimised |
+|---|---|---|---|
+| BTC | +1.8% / −9.0% / 0.30 | −5.5% / +5.2% / 0.74 | −8.9% / +0.7% / 0.81 |
+| ETH | +8.2% / −14.4% / 0.22 | +11.9% / +0.3% / 0.32 | −12.3% / −0.8% / 0.75 |
+| SOL | −3.8% / −15.0% / 0.36 | +25.1% / +7.9% / 0.27 | −13.3% / +4.1% / 0.78 |
+
+- **None of the nine is significant: the smallest p is 0.22.** The signal's results are within what the same trades placed at random would give. Over the whole year the strategy beat buy-and-hold by 18–36 points, but random placements of the same trades beat buy-and-hold too (median −9 to −15 % against −17 to −35 %): most of the gain came from holding the coin only about half the time in a falling market, not from choosing the days.
+- **The optimised thresholds do worse than random** (p 0.75–0.81), the same overfitting the walk-forward table shows.
+- **What a p-value cannot say here.** One year, three strongly correlated coins and nine tests: with that many tries a p below 0.05 turns up by chance fairly often (in 1 − 0.95⁹ ≈ 37 % of tables if the tests were independent; less, since they are correlated), so a single small p would not be evidence either. A large p is not proof that the signal is useless, only that this data cannot tell it from luck.
 ---
 
 ## Architecture
@@ -189,6 +203,7 @@ Composite score is normalised over the weights of indicators that could be compu
 - **Sortino ratio**: mean return over downside deviation, √(mean(min(r, 0)²)) across *all* days, annualised with √365.
 - **Max drawdown**: peak-to-trough portfolio decline over the simulation.
 - **Profit factor**: sum of winning trade returns ÷ sum of losing trade returns.
+- **Random-timing test**: the strategy's round trips placed at random in its window (same count, holding days and commission), 10,000 times with a fixed seed; one-sided p-value. Reported for the all-in strategies; the vol-targeted one sizes its trades and buy-and-hold has no timing.
 
 ### Performance
 

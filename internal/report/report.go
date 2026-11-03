@@ -161,6 +161,65 @@ func PrintBacktestSummary(w io.Writer, results []backtest.Result) {
 	fmt.Fprintf(w, "  %sWARNING: Past performance does not predict future results.%s\n\n", yellow, reset)
 }
 
+// TimingRow is one strategy's random-timing test, for PrintTimingTests.
+type TimingRow struct {
+	Coin, Strategy string
+	Test           backtest.TimingTest
+}
+
+// TimingRows collects the tests attached to backtest results (nil ones are skipped).
+func TimingRows(strategy string, results []backtest.Result) []TimingRow {
+	var rows []TimingRow
+	for _, r := range results {
+		if r.RandomTiming != nil {
+			rows = append(rows, TimingRow{r.CoinID, strategy, *r.RandomTiming})
+		}
+	}
+	return rows
+}
+
+// WalkForwardTimingRows lists the optimised and fixed strategies' tests per coin.
+func WalkForwardTimingRows(results []backtest.WalkForwardResult) []TimingRow {
+	var rows []TimingRow
+	for _, wf := range results {
+		for _, s := range []struct {
+			name string
+			r    backtest.Result
+		}{{"Walk-forward optimised", wf.Optimized}, {"Fixed default (±0.2)", wf.Fixed}} {
+			if s.r.RandomTiming != nil {
+				rows = append(rows, TimingRow{wf.CoinID, s.name, *s.r.RandomTiming})
+			}
+		}
+	}
+	return rows
+}
+
+// PrintTimingTests shows each strategy's return against the same trades placed at
+// random, and the one-sided p-value.
+func PrintTimingTests(w io.Writer, rows []TimingRow) {
+	if len(rows) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "%s━━━━━━━━━━━━━━━━━━━━━━━━━━ RANDOM-TIMING TEST ━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n\n", bold+cyan, reset)
+	// Header widths match the value formats below; the 5–95% column is "%+7.1f%% / %+6.1f%%", 18 wide.
+	fmt.Fprintf(w, "  %s%-10s  %-24s  %9s  %9s  %18s  %7s  %6s  %4s%s\n", bold,
+		"Coin", "Strategy", "Return", "Random", "Random 5–95%", "p", "Trades", "Days", reset)
+	fmt.Fprintf(w, "  %s\n", strings.Repeat("─", 101))
+	for _, r := range rows {
+		col := dim
+		if r.Test.PValue < 0.05 {
+			col = green
+		}
+		fmt.Fprintf(w, "  %-10s  %-24s  %+8.1f%%  %+8.1f%%  %+7.1f%% / %+6.1f%%  %s%7.3f%s  %6d  %4d\n",
+			strings.ToUpper(r.Coin), r.Strategy, r.Test.Actual, r.Test.Median, r.Test.Q05, r.Test.Q95,
+			col, r.Test.PValue, reset, r.Test.Trades, r.Test.DaysHeld)
+	}
+	runs := rows[0].Test.Runs
+	fmt.Fprintf(w, "\n  %sRandom: the same trades (count, holding days, commission) placed at random in the\n", dim)
+	fmt.Fprintf(w, "  same window, %d times; Random is their median. p: share of placements that did at\n", runs)
+	fmt.Fprintf(w, "  least as well. A small p says the timing beat chance; it is one period and few coins.%s\n\n", reset)
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 // indicatorRow keeps every value right-aligned in one column, with labels

@@ -1,0 +1,12 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━ RANDOM-TIMING TEST ━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Coin        Strategy                     Return     Random        Random 5–95%        p  Trades  Days
+  ─────────────────────────────────────────────────────────────────────────────────────────────────────
+  BITCOIN     Fixed default (±0.2)          +5.3%      +2.1%    -14.8% /  +21.6%    0.391       9   117
+  ETHEREUM    Walk-forward optimised       +27.5%      +3.4%    -19.2% /  +31.0%    0.071       7    82
+  SOLANA      Fixed default (±0.2)         +31.0%      -1.2%    -24.4% /  +26.3%    0.021      11   108
+
+  Random: the same trades (count, holding days, commission) placed at random in the
+  same window, 10000 times; Random is their median. p: share of placements that did at
+  least as well. A small p says the timing beat chance; it is one period and few coins.
+

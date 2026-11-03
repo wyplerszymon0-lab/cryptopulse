@@ -112,6 +112,13 @@ func WalkForward(eng Predictor, cfg WalkForwardConfig) (WalkForwardResult, error
 		r.BuyHoldReturn = bh
 		r.DataPoints = n - oosStart
 	}
+	// Timing is only meaningful for the all-in strategies: the vol-targeted one
+	// sizes its trades, and buy-and-hold has no timing.
+	for _, r := range []*Result{&res.Optimized, &res.Fixed} {
+		if err := attachTiming(r, prices, oosStart+1); err != nil {
+			return WalkForwardResult{}, err
+		}
+	}
 	return res, nil
 }
 
