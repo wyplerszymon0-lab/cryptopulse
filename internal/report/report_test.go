@@ -106,6 +106,30 @@ func TestBacktestSummaryGolden(t *testing.T) {
 	checkGolden(t, "backtest_summary", got)
 }
 
+var timingRows = []TimingRow{
+	{"bitcoin", "Fixed default (±0.2)", backtest.TimingTest{Runs: 10000, Trades: 9, DaysHeld: 117, Actual: 5.3, Median: 2.1, Q05: -14.8, Q95: 21.6, PValue: 0.3911}},
+	{"ethereum", "Walk-forward optimised", backtest.TimingTest{Runs: 10000, Trades: 7, DaysHeld: 82, Actual: 27.5, Median: 3.4, Q05: -19.2, Q95: 31.0, PValue: 0.0712}},
+	{"solana", "Fixed default (±0.2)", backtest.TimingTest{Runs: 10000, Trades: 11, DaysHeld: 108, Actual: 31.0, Median: -1.2, Q05: -24.4, Q95: 26.3, PValue: 0.0213}},
+}
+
+func TestTimingTestsGolden(t *testing.T) {
+	_, got := render(func(w *bytes.Buffer) { PrintTimingTests(w, timingRows) })
+	checkGolden(t, "timing_tests", got)
+}
+
+func TestTimingRowsSkipResultsWithoutATest(t *testing.T) {
+	tt := backtest.TimingTest{Runs: 10, PValue: 0.5}
+	rows := TimingRows("Fixed", []backtest.Result{{CoinID: "bitcoin", RandomTiming: &tt}, {CoinID: "ethereum"}})
+	if len(rows) != 1 || rows[0].Coin != "bitcoin" || rows[0].Strategy != "Fixed" {
+		t.Errorf("got %+v", rows)
+	}
+	var b bytes.Buffer
+	PrintTimingTests(&b, nil)
+	if b.Len() != 0 {
+		t.Error("no rows should print nothing")
+	}
+}
+
 func TestWalkForwardGolden(t *testing.T) {
 	_, got := render(func(w *bytes.Buffer) { PrintWalkForward(w, walkForward) })
 	checkGolden(t, "walk_forward", got)

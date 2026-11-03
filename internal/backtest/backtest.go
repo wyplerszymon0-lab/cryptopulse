@@ -75,6 +75,9 @@ type Result struct {
 	ProfitFactor float64 `json:"profit_factor"`
 	Exposure     float64 `json:"avg_exposure_pct"` // average share of capital in the coin
 
+	// Whether the timing beats chance: the same trades placed at random (RandomTiming).
+	RandomTiming *TimingTest `json:"random_timing,omitempty"`
+
 	// Metadata
 	DataPoints int       `json:"data_points"`
 	Trades     []Trade   `json:"trades,omitempty"`
@@ -148,7 +151,21 @@ func RunWithParams(eng Predictor, p Params) (Result, error) {
 	// the strategy for the period it was not yet active.
 	res.BuyHoldReturn = pctChange(prices[WarmupPeriod], prices[n-1])
 	res.DataPoints = n
+	// The first decision is on day WarmupPeriod, so the first fill is the day after.
+	if err := attachTiming(&res, prices, WarmupPeriod+1); err != nil {
+		return Result{}, err
+	}
 	return res, nil
+}
+
+// attachTiming runs the random-timing test on r's trades over [from, last day].
+func attachTiming(r *Result, prices []float64, from int) error {
+	tt, err := RandomTiming(prices, r.Trades, from, len(prices)-1, DefaultTimingRuns, TimingSeed)
+	if err != nil {
+		return fmt.Errorf("random-timing test: %w", err)
+	}
+	r.RandomTiming = &tt
+	return nil
 }
 
 // simulation is the raw outcome of trading one window.
