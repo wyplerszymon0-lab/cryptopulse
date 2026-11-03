@@ -216,6 +216,17 @@ function renderTiles(a) {
   $("t-r2").textContent = `R² ${a.forecast_r2.toFixed(2)} over the last 14 days`;
 }
 
+// The random-timing test (only on the all-in strategies; older data.json has none).
+function timingCell(t) {
+  if (!t) return el("td", { class: "muted" }, "—");
+  const p = t.p_value < 0.001 ? "p < 0.001" : `p = ${t.p_value.toFixed(2)}`;
+  return el("td", {
+    class: t.p_value < 0.05 ? "up" : "",
+    title: `Random placements of the same ${t.trades} trades: median ${fmtPct(t.random_median_pct)}, ` +
+      `5–95% ${fmtPct(t.random_q05_pct)} to ${fmtPct(t.random_q95_pct)} (${t.runs.toLocaleString("en-US")} runs)`,
+  }, t.p_value < 0.05 ? `${p}, beats chance` : `${p}, not distinguishable`);
+}
+
 function renderTables(wf, times) {
   const body = $("strategies").querySelector("tbody");
   body.replaceChildren();
@@ -232,6 +243,7 @@ function renderTables(wf, times) {
       el("td", {}, fmtPct(-r.max_drawdown_pct)),
       el("td", {}, s.key === "buy_hold" ? "—" : String(r.total_trades)),
       el("td", {}, `${Math.round(r.avg_exposure_pct)}%`),
+      timingCell(r.random_timing),
     );
     body.append(tr);
   }
